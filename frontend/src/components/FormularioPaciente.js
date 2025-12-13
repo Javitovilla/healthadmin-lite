@@ -1,20 +1,14 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { Container, Row, Col, Card, Form, Button, Spinner, Alert } from 'react-bootstrap';
 import { usePacientes } from '../contexts/PacienteContext';
-import { useNotification } from '../contexts/NotificationContext';
-import './FormularioPaciente.css';
+import { toast } from 'react-toastify';
 
-/**
- * Componente de formulario para crear y editar pacientes
- * Implementa useState, useEffect, useCallback, useMemo para manejo de estado y optimización
- */
 const FormularioPaciente = () => {
   const navigate = useNavigate();
   const { id } = useParams();
   const { crearPaciente, actualizarPaciente, obtenerPacientePorId, loading } = usePacientes();
-  const { mostrarNotificacion } = useNotification();
   
-  // Estado inicial del formulario
   const estadoInicial = {
     tipoDocumento: 'CC',
     numeroDocumento: '',
@@ -36,43 +30,33 @@ const FormularioPaciente = () => {
     }
   };
 
-  // Hook useState para manejar el estado del formulario
   const [formData, setFormData] = useState(estadoInicial);
   const [errores, setErrores] = useState({});
   const [enviando, setEnviando] = useState(false);
+  const [validated, setValidated] = useState(false);
 
-  // Hook useEffect para cargar datos del paciente en modo edición
   useEffect(() => {
     if (id) {
       cargarPaciente();
     }
   }, [id]);
 
-  /**
-   * Cargar datos del paciente para edición
-   * Implementa useCallback para evitar recreación de funciones
-   */
   const cargarPaciente = useCallback(async () => {
     try {
       const paciente = await obtenerPacientePorId(id);
-      // Formatear fecha para input date
       if (paciente.fechaNacimiento) {
         paciente.fechaNacimiento = paciente.fechaNacimiento.split('T')[0];
       }
       setFormData(paciente);
     } catch (error) {
-      mostrarNotificacion('Error al cargar paciente', 'error');
+      toast.error('Error al cargar paciente');
       navigate('/pacientes');
     }
-  }, [id, obtenerPacientePorId, mostrarNotificacion, navigate]);
+  }, [id, obtenerPacientePorId, navigate]);
 
-  /**
-   * Manejar cambios en los inputs del formulario
-   */
   const handleChange = (e) => {
     const { name, value } = e.target;
     
-    // Si es un campo del contacto de emergencia
     if (name.startsWith('contacto.')) {
       const campo = name.split('.')[1];
       setFormData(prevState => ({
@@ -89,7 +73,6 @@ const FormularioPaciente = () => {
       }));
     }
     
-    // Limpiar error del campo cuando el usuario empiece a escribir
     if (errores[name]) {
       setErrores(prevState => ({
         ...prevState,
@@ -98,67 +81,44 @@ const FormularioPaciente = () => {
     }
   };
 
-  /**
-   * Validación del formulario
-   * Implementa useMemo para optimizar validaciones complejas
-   */
   const validarFormulario = useMemo(() => {
     return () => {
       const nuevosErrores = {};
       
-      // Validaciones básicas
       if (!formData.numeroDocumento) {
         nuevosErrores.numeroDocumento = 'El número de documento es obligatorio';
-      } else if (formData.numeroDocumento.length < 5) {
-        nuevosErrores.numeroDocumento = 'El número de documento debe tener al menos 5 caracteres';
       }
-      
       if (!formData.nombres) {
         nuevosErrores.nombres = 'Los nombres son obligatorios';
       }
-      
       if (!formData.apellidos) {
         nuevosErrores.apellidos = 'Los apellidos son obligatorios';
       }
-      
       if (!formData.fechaNacimiento) {
         nuevosErrores.fechaNacimiento = 'La fecha de nacimiento es obligatoria';
-      } else {
-        const fecha = new Date(formData.fechaNacimiento);
-        if (fecha > new Date()) {
-          nuevosErrores.fechaNacimiento = 'La fecha de nacimiento no puede ser futura';
-        }
       }
-      
       if (!formData.telefono) {
         nuevosErrores.telefono = 'El teléfono es obligatorio';
       } else if (!/^[0-9]{7,10}$/.test(formData.telefono)) {
         nuevosErrores.telefono = 'El teléfono debe tener entre 7 y 10 dígitos';
       }
-      
       if (!formData.email) {
         nuevosErrores.email = 'El correo electrónico es obligatorio';
       } else if (!/\S+@\S+\.\S+/.test(formData.email)) {
         nuevosErrores.email = 'El correo electrónico no es válido';
       }
-      
       if (!formData.direccion) {
         nuevosErrores.direccion = 'La dirección es obligatoria';
       }
-      
       if (!formData.eps) {
         nuevosErrores.eps = 'La EPS es obligatoria';
       }
-      
-      // Validaciones del contacto de emergencia
       if (!formData.contactoEmergencia.nombre) {
         nuevosErrores['contacto.nombre'] = 'El nombre del contacto es obligatorio';
       }
-      
       if (!formData.contactoEmergencia.telefono) {
         nuevosErrores['contacto.telefono'] = 'El teléfono del contacto es obligatorio';
       }
-      
       if (!formData.contactoEmergencia.parentesco) {
         nuevosErrores['contacto.parentesco'] = 'El parentesco es obligatorio';
       }
@@ -167,17 +127,17 @@ const FormularioPaciente = () => {
     };
   }, [formData]);
 
-  /**
-   * Manejar envío del formulario
-   */
   const handleSubmit = async (e) => {
     e.preventDefault();
+    e.stopPropagation();
     
-    // Validar formulario
+    const form = e.currentTarget;
+    setValidated(true);
+    
     const erroresValidacion = validarFormulario();
-    if (Object.keys(erroresValidacion).length > 0) {
+    if (Object.keys(erroresValidacion).length > 0 || !form.checkValidity()) {
       setErrores(erroresValidacion);
-      mostrarNotificacion('Por favor complete todos los campos obligatorios', 'error');
+      toast.error('Por favor complete todos los campos obligatorios');
       return;
     }
     
@@ -186,23 +146,19 @@ const FormularioPaciente = () => {
     try {
       if (id) {
         await actualizarPaciente(id, formData);
-        mostrarNotificacion('Paciente actualizado exitosamente', 'success');
+        toast.success('Paciente actualizado exitosamente');
       } else {
         await crearPaciente(formData);
-        mostrarNotificacion('Paciente creado exitosamente', 'success');
+        toast.success('Paciente creado exitosamente');
       }
       navigate('/pacientes');
     } catch (error) {
-      mostrarNotificacion(error.message || 'Error al guardar paciente', 'error');
+      toast.error(error.message || 'Error al guardar paciente');
     } finally {
       setEnviando(false);
     }
   };
 
-  /**
-   * Calcular edad basada en fecha de nacimiento
-   * Ejemplo de uso de useMemo para cálculos derivados
-   */
   const edad = useMemo(() => {
     if (!formData.fechaNacimiento) return '';
     
@@ -218,324 +174,417 @@ const FormularioPaciente = () => {
     return edadCalculada;
   }, [formData.fechaNacimiento]);
 
-  return (
-    <div className="formulario-paciente">
-      <div className="formulario-header">
-        <h2>{id ? 'Editar Paciente' : 'Nuevo Paciente'}</h2>
-        {edad && <span className="edad-badge">Edad: {edad} años</span>}
+  if (loading && id) {
+    return (
+      <div className="loader-container">
+        <div className="health-loader"></div>
       </div>
-      
-      <form onSubmit={handleSubmit} className="formulario">
-        {/* Información Personal */}
-        <fieldset>
-          <legend>Información Personal</legend>
-          
-          <div className="form-row">
-            <div className="form-group">
-              <label htmlFor="tipoDocumento">Tipo de Documento *</label>
-              <select
-                id="tipoDocumento"
-                name="tipoDocumento"
-                value={formData.tipoDocumento}
-                onChange={handleChange}
-                className={errores.tipoDocumento ? 'error' : ''}
+    );
+  }
+
+  return (
+    <Container className="fade-in">
+      <Row className="justify-content-center">
+        <Col lg={10}>
+          {/* Header */}
+          <div className="mb-4">
+            <Button 
+              variant="outline-secondary" 
+              onClick={() => navigate('/pacientes')}
+              className="rounded-pill mb-3"
+            >
+              <i className="bi bi-arrow-left me-2"></i>
+              Volver a Pacientes
+            </Button>
+            <h1 className="display-5 fw-bold text-primary">
+              <i className={`bi bi-${id ? 'pencil-square' : 'person-plus'} me-3`}></i>
+              {id ? 'Editar Paciente' : 'Nuevo Paciente'}
+            </h1>
+            {edad && (
+              <Alert variant="info" className="mt-3">
+                <i className="bi bi-info-circle me-2"></i>
+                Edad del paciente: <strong>{edad} años</strong>
+              </Alert>
+            )}
+          </div>
+
+          {/* Formulario */}
+          <Form noValidate validated={validated} onSubmit={handleSubmit}>
+            {/* Información Personal */}
+            <Card className="custom-card mb-4">
+              <Card.Header className="bg-white border-0 pt-4 pb-0">
+                <h5 className="mb-3">
+                  <i className="bi bi-person-vcard me-2 text-primary"></i>
+                  Información Personal
+                </h5>
+              </Card.Header>
+              <Card.Body>
+                <Row>
+                  <Col md={4}>
+                    <Form.Group className="mb-3">
+                      <Form.Label>Tipo de Documento <span className="text-danger">*</span></Form.Label>
+                      <Form.Select
+                        name="tipoDocumento"
+                        value={formData.tipoDocumento}
+                        onChange={handleChange}
+                        required
+                      >
+                        <option value="CC">Cédula de Ciudadanía</option>
+                        <option value="TI">Tarjeta de Identidad</option>
+                        <option value="CE">Cédula de Extranjería</option>
+                        <option value="PA">Pasaporte</option>
+                        <option value="RC">Registro Civil</option>
+                      </Form.Select>
+                    </Form.Group>
+                  </Col>
+                  <Col md={8}>
+                    <Form.Group className="mb-3">
+                      <Form.Label>Número de Documento <span className="text-danger">*</span></Form.Label>
+                      <Form.Control
+                        type="text"
+                        name="numeroDocumento"
+                        value={formData.numeroDocumento}
+                        onChange={handleChange}
+                        isInvalid={!!errores.numeroDocumento}
+                        required
+                        placeholder="12345678"
+                      />
+                      <Form.Control.Feedback type="invalid">
+                        {errores.numeroDocumento}
+                      </Form.Control.Feedback>
+                    </Form.Group>
+                  </Col>
+                </Row>
+
+                <Row>
+                  <Col md={6}>
+                    <Form.Group className="mb-3">
+                      <Form.Label>Nombres <span className="text-danger">*</span></Form.Label>
+                      <Form.Control
+                        type="text"
+                        name="nombres"
+                        value={formData.nombres}
+                        onChange={handleChange}
+                        isInvalid={!!errores.nombres}
+                        required
+                        placeholder="Juan Carlos"
+                      />
+                      <Form.Control.Feedback type="invalid">
+                        {errores.nombres}
+                      </Form.Control.Feedback>
+                    </Form.Group>
+                  </Col>
+                  <Col md={6}>
+                    <Form.Group className="mb-3">
+                      <Form.Label>Apellidos <span className="text-danger">*</span></Form.Label>
+                      <Form.Control
+                        type="text"
+                        name="apellidos"
+                        value={formData.apellidos}
+                        onChange={handleChange}
+                        isInvalid={!!errores.apellidos}
+                        required
+                        placeholder="Pérez González"
+                      />
+                      <Form.Control.Feedback type="invalid">
+                        {errores.apellidos}
+                      </Form.Control.Feedback>
+                    </Form.Group>
+                  </Col>
+                </Row>
+
+                <Row>
+                  <Col md={6}>
+                    <Form.Group className="mb-3">
+                      <Form.Label>Fecha de Nacimiento <span className="text-danger">*</span></Form.Label>
+                      <Form.Control
+                        type="date"
+                        name="fechaNacimiento"
+                        value={formData.fechaNacimiento}
+                        onChange={handleChange}
+                        isInvalid={!!errores.fechaNacimiento}
+                        required
+                        max={new Date().toISOString().split('T')[0]}
+                      />
+                      <Form.Control.Feedback type="invalid">
+                        {errores.fechaNacimiento}
+                      </Form.Control.Feedback>
+                    </Form.Group>
+                  </Col>
+                  <Col md={6}>
+                    <Form.Group className="mb-3">
+                      <Form.Label>Género <span className="text-danger">*</span></Form.Label>
+                      <Form.Select
+                        name="genero"
+                        value={formData.genero}
+                        onChange={handleChange}
+                        required
+                      >
+                        <option value="M">Masculino</option>
+                        <option value="F">Femenino</option>
+                        <option value="O">Otro</option>
+                      </Form.Select>
+                    </Form.Group>
+                  </Col>
+                </Row>
+              </Card.Body>
+            </Card>
+            {/* Información de Contacto */}
+            <Card className="custom-card mb-4">
+              <Card.Header className="bg-white border-0 pt-4 pb-0">
+                <h5 className="mb-3">
+                  <i className="bi bi-telephone me-2 text-primary"></i>
+                  Información de Contacto
+                </h5>
+              </Card.Header>
+              <Card.Body>
+                <Row>
+                  <Col md={6}>
+                    <Form.Group className="mb-3">
+                      <Form.Label>Teléfono <span className="text-danger">*</span></Form.Label>
+                      <Form.Control
+                        type="tel"
+                        name="telefono"
+                        value={formData.telefono}
+                        onChange={handleChange}
+                        isInvalid={!!errores.telefono}
+                        required
+                        placeholder="3001234567"
+                      />
+                      <Form.Control.Feedback type="invalid">
+                        {errores.telefono}
+                      </Form.Control.Feedback>
+                    </Form.Group>
+                  </Col>
+                  <Col md={6}>
+                    <Form.Group className="mb-3">
+                      <Form.Label>Correo Electrónico <span className="text-danger">*</span></Form.Label>
+                      <Form.Control
+                        type="email"
+                        name="email"
+                        value={formData.email}
+                        onChange={handleChange}
+                        isInvalid={!!errores.email}
+                        required
+                        placeholder="correo@ejemplo.com"
+                      />
+                      <Form.Control.Feedback type="invalid">
+                        {errores.email}
+                      </Form.Control.Feedback>
+                    </Form.Group>
+                  </Col>
+                </Row>
+
+                <Row>
+                  <Col md={8}>
+                    <Form.Group className="mb-3">
+                      <Form.Label>Dirección <span className="text-danger">*</span></Form.Label>
+                      <Form.Control
+                        type="text"
+                        name="direccion"
+                        value={formData.direccion}
+                        onChange={handleChange}
+                        isInvalid={!!errores.direccion}
+                        required
+                        placeholder="Calle 123 # 45-67"
+                      />
+                      <Form.Control.Feedback type="invalid">
+                        {errores.direccion}
+                      </Form.Control.Feedback>
+                    </Form.Group>
+                  </Col>
+                  <Col md={4}>
+                    <Form.Group className="mb-3">
+                      <Form.Label>Ciudad <span className="text-danger">*</span></Form.Label>
+                      <Form.Control
+                        type="text"
+                        name="ciudad"
+                        value={formData.ciudad}
+                        onChange={handleChange}
+                        required
+                        placeholder="Bogotá"
+                      />
+                    </Form.Group>
+                  </Col>
+                </Row>
+              </Card.Body>
+            </Card>
+
+            {/* Información Médica */}
+            <Card className="custom-card mb-4">
+              <Card.Header className="bg-white border-0 pt-4 pb-0">
+                <h5 className="mb-3">
+                  <i className="bi bi-heart-pulse me-2 text-primary"></i>
+                  Información Médica
+                </h5>
+              </Card.Header>
+              <Card.Body>
+                <Row>
+                  <Col md={6}>
+                    <Form.Group className="mb-3">
+                      <Form.Label>EPS <span className="text-danger">*</span></Form.Label>
+                      <Form.Control
+                        type="text"
+                        name="eps"
+                        value={formData.eps}
+                        onChange={handleChange}
+                        isInvalid={!!errores.eps}
+                        required
+                        placeholder="Compensar"
+                      />
+                      <Form.Control.Feedback type="invalid">
+                        {errores.eps}
+                      </Form.Control.Feedback>
+                    </Form.Group>
+                  </Col>
+                  <Col md={6}>
+                    <Form.Group className="mb-3">
+                      <Form.Label>Grupo Sanguíneo <span className="text-danger">*</span></Form.Label>
+                      <Form.Select
+                        name="grupoSanguineo"
+                        value={formData.grupoSanguineo}
+                        onChange={handleChange}
+                        required
+                      >
+                        <option value="A+">A+</option>
+                        <option value="A-">A-</option>
+                        <option value="B+">B+</option>
+                        <option value="B-">B-</option>
+                        <option value="AB+">AB+</option>
+                        <option value="AB-">AB-</option>
+                        <option value="O+">O+</option>
+                        <option value="O-">O-</option>
+                      </Form.Select>
+                    </Form.Group>
+                  </Col>
+                </Row>
+
+                <Row>
+                  <Col>
+                    <Form.Group className="mb-3">
+                      <Form.Label>Alergias</Form.Label>
+                      <Form.Control
+                        as="textarea"
+                        rows={3}
+                        name="alergias"
+                        value={formData.alergias}
+                        onChange={handleChange}
+                        placeholder="Describa las alergias conocidas del paciente"
+                      />
+                    </Form.Group>
+                  </Col>
+                </Row>
+              </Card.Body>
+            </Card>
+
+            {/* Contacto de Emergencia */}
+            <Card className="custom-card mb-4">
+              <Card.Header className="bg-white border-0 pt-4 pb-0">
+                <h5 className="mb-3">
+                  <i className="bi bi-exclamation-triangle me-2 text-primary"></i>
+                  Contacto de Emergencia
+                </h5>
+              </Card.Header>
+              <Card.Body>
+                <Row>
+                  <Col md={6}>
+                    <Form.Group className="mb-3">
+                      <Form.Label>Nombre <span className="text-danger">*</span></Form.Label>
+                      <Form.Control
+                        type="text"
+                        name="contacto.nombre"
+                        value={formData.contactoEmergencia.nombre}
+                        onChange={handleChange}
+                        isInvalid={!!errores['contacto.nombre']}
+                        required
+                        placeholder="María González"
+                      />
+                      <Form.Control.Feedback type="invalid">
+                        {errores['contacto.nombre']}
+                      </Form.Control.Feedback>
+                    </Form.Group>
+                  </Col>
+                  <Col md={6}>
+                    <Form.Group className="mb-3">
+                      <Form.Label>Teléfono <span className="text-danger">*</span></Form.Label>
+                      <Form.Control
+                        type="tel"
+                        name="contacto.telefono"
+                        value={formData.contactoEmergencia.telefono}
+                        onChange={handleChange}
+                        isInvalid={!!errores['contacto.telefono']}
+                        required
+                        placeholder="3009876543"
+                      />
+                      <Form.Control.Feedback type="invalid">
+                        {errores['contacto.telefono']}
+                      </Form.Control.Feedback>
+                    </Form.Group>
+                  </Col>
+                </Row>
+
+                <Row>
+                  <Col md={6}>
+                    <Form.Group className="mb-3">
+                      <Form.Label>Parentesco <span className="text-danger">*</span></Form.Label>
+                      <Form.Control
+                        type="text"
+                        name="contacto.parentesco"
+                        value={formData.contactoEmergencia.parentesco}
+                        onChange={handleChange}
+                        isInvalid={!!errores['contacto.parentesco']}
+                        required
+                        placeholder="Esposa, Hijo, Madre, etc."
+                      />
+                      <Form.Control.Feedback type="invalid">
+                        {errores['contacto.parentesco']}
+                      </Form.Control.Feedback>
+                    </Form.Group>
+                  </Col>
+                </Row>
+              </Card.Body>
+            </Card>
+
+            {/* Botones de acción */}
+            <div className="d-flex justify-content-end gap-2 mb-5">
+              <Button
+                variant="outline-secondary"
+                className="rounded-pill px-4"
+                onClick={() => navigate('/pacientes')}
+                disabled={enviando}
               >
-                <option value="CC">Cédula de Ciudadanía</option>
-                <option value="TI">Tarjeta de Identidad</option>
-                <option value="CE">Cédula de Extranjería</option>
-                <option value="PA">Pasaporte</option>
-                <option value="RC">Registro Civil</option>
-              </select>
-            </div>
-            
-            <div className="form-group">
-              <label htmlFor="numeroDocumento">Número de Documento *</label>
-              <input
-                type="text"
-                id="numeroDocumento"
-                name="numeroDocumento"
-                value={formData.numeroDocumento}
-                onChange={handleChange}
-                className={errores.numeroDocumento ? 'error' : ''}
-                placeholder="12345678"
-              />
-              {errores.numeroDocumento && (
-                <span className="error-message">{errores.numeroDocumento}</span>
-              )}
-            </div>
-          </div>
-          
-          <div className="form-row">
-            <div className="form-group">
-              <label htmlFor="nombres">Nombres *</label>
-              <input
-                type="text"
-                id="nombres"
-                name="nombres"
-                value={formData.nombres}
-                onChange={handleChange}
-                className={errores.nombres ? 'error' : ''}
-                placeholder="Juan Carlos"
-              />
-              {errores.nombres && (
-                <span className="error-message">{errores.nombres}</span>
-              )}
-            </div>
-            
-            <div className="form-group">
-              <label htmlFor="apellidos">Apellidos *</label>
-              <input
-                type="text"
-                id="apellidos"
-                name="apellidos"
-                value={formData.apellidos}
-                onChange={handleChange}
-                className={errores.apellidos ? 'error' : ''}
-                placeholder="Pérez González"
-              />
-              {errores.apellidos && (
-                <span className="error-message">{errores.apellidos}</span>
-              )}
-            </div>
-          </div>
-          
-          <div className="form-row">
-            <div className="form-group">
-              <label htmlFor="fechaNacimiento">Fecha de Nacimiento *</label>
-              <input
-                type="date"
-                id="fechaNacimiento"
-                name="fechaNacimiento"
-                value={formData.fechaNacimiento}
-                onChange={handleChange}
-                className={errores.fechaNacimiento ? 'error' : ''}
-                max={new Date().toISOString().split('T')[0]}
-              />
-              {errores.fechaNacimiento && (
-                <span className="error-message">{errores.fechaNacimiento}</span>
-              )}
-            </div>
-            
-            <div className="form-group">
-              <label htmlFor="genero">Género *</label>
-              <select
-                id="genero"
-                name="genero"
-                value={formData.genero}
-                onChange={handleChange}
+                Cancelar
+              </Button>
+              <Button
+                type="submit"
+                variant="primary"
+                className="rounded-pill px-4"
+                disabled={enviando || loading}
               >
-                <option value="M">Masculino</option>
-                <option value="F">Femenino</option>
-                <option value="O">Otro</option>
-              </select>
+                {enviando ? (
+                  <>
+                    <Spinner
+                      as="span"
+                      animation="border"
+                      size="sm"
+                      role="status"
+                      aria-hidden="true"
+                      className="me-2"
+                    />
+                    Guardando...
+                  </>
+                ) : (
+                  <>
+                    <i className="bi bi-check-circle me-2"></i>
+                    {id ? 'Actualizar' : 'Crear'} Paciente
+                  </>
+                )}
+              </Button>
             </div>
-          </div>
-        </fieldset>
-        
-        {/* Información de Contacto */}
-        <fieldset>
-          <legend>Información de Contacto</legend>
-          
-          <div className="form-row">
-            <div className="form-group">
-              <label htmlFor="telefono">Teléfono *</label>
-              <input
-                type="tel"
-                id="telefono"
-                name="telefono"
-                value={formData.telefono}
-                onChange={handleChange}
-                className={errores.telefono ? 'error' : ''}
-                placeholder="3001234567"
-              />
-              {errores.telefono && (
-                <span className="error-message">{errores.telefono}</span>
-              )}
-            </div>
-            
-            <div className="form-group">
-              <label htmlFor="email">Correo Electrónico *</label>
-              <input
-                type="email"
-                id="email"
-                name="email"
-                value={formData.email}
-                onChange={handleChange}
-                className={errores.email ? 'error' : ''}
-                placeholder="correo@ejemplo.com"
-              />
-              {errores.email && (
-                <span className="error-message">{errores.email}</span>
-              )}
-            </div>
-          </div>
-          
-          <div className="form-row">
-            <div className="form-group full-width">
-              <label htmlFor="direccion">Dirección *</label>
-              <input
-                type="text"
-                id="direccion"
-                name="direccion"
-                value={formData.direccion}
-                onChange={handleChange}
-                className={errores.direccion ? 'error' : ''}
-                placeholder="Calle 123 # 45-67"
-              />
-              {errores.direccion && (
-                <span className="error-message">{errores.direccion}</span>
-              )}
-            </div>
-          </div>
-          
-          <div className="form-row">
-            <div className="form-group">
-              <label htmlFor="ciudad">Ciudad *</label>
-              <input
-                type="text"
-                id="ciudad"
-                name="ciudad"
-                value={formData.ciudad}
-                onChange={handleChange}
-                placeholder="Bogotá"
-              />
-            </div>
-          </div>
-        </fieldset>
-        
-        {/* Información Médica */}
-        <fieldset>
-          <legend>Información Médica</legend>
-          
-          <div className="form-row">
-            <div className="form-group">
-              <label htmlFor="eps">EPS *</label>
-              <input
-                type="text"
-                id="eps"
-                name="eps"
-                value={formData.eps}
-                onChange={handleChange}
-                className={errores.eps ? 'error' : ''}
-                placeholder="Compensar"
-              />
-              {errores.eps && (
-                <span className="error-message">{errores.eps}</span>
-              )}
-            </div>
-            
-            <div className="form-group">
-              <label htmlFor="grupoSanguineo">Grupo Sanguíneo *</label>
-              <select
-                id="grupoSanguineo"
-                name="grupoSanguineo"
-                value={formData.grupoSanguineo}
-                onChange={handleChange}
-              >
-                <option value="A+">A+</option>
-                <option value="A-">A-</option>
-                <option value="B+">B+</option>
-                <option value="B-">B-</option>
-                <option value="AB+">AB+</option>
-                <option value="AB-">AB-</option>
-                <option value="O+">O+</option>
-                <option value="O-">O-</option>
-              </select>
-            </div>
-          </div>
-          
-          <div className="form-row">
-            <div className="form-group full-width">
-              <label htmlFor="alergias">Alergias</label>
-              <textarea
-                id="alergias"
-                name="alergias"
-                value={formData.alergias}
-                onChange={handleChange}
-                rows="3"
-                placeholder="Describa las alergias conocidas del paciente"
-              />
-            </div>
-          </div>
-        </fieldset>
-        
-        {/* Contacto de Emergencia */}
-        <fieldset>
-          <legend>Contacto de Emergencia</legend>
-          
-          <div className="form-row">
-            <div className="form-group">
-              <label htmlFor="contacto.nombre">Nombre *</label>
-              <input
-                type="text"
-                id="contacto.nombre"
-                name="contacto.nombre"
-                value={formData.contactoEmergencia.nombre}
-                onChange={handleChange}
-                className={errores['contacto.nombre'] ? 'error' : ''}
-                placeholder="María González"
-              />
-              {errores['contacto.nombre'] && (
-                <span className="error-message">{errores['contacto.nombre']}</span>
-              )}
-            </div>
-            
-            <div className="form-group">
-              <label htmlFor="contacto.telefono">Teléfono *</label>
-              <input
-                type="tel"
-                id="contacto.telefono"
-                name="contacto.telefono"
-                value={formData.contactoEmergencia.telefono}
-                onChange={handleChange}
-                className={errores['contacto.telefono'] ? 'error' : ''}
-                placeholder="3009876543"
-              />
-              {errores['contacto.telefono'] && (
-                <span className="error-message">{errores['contacto.telefono']}</span>
-              )}
-            </div>
-          </div>
-          
-          <div className="form-row">
-            <div className="form-group">
-              <label htmlFor="contacto.parentesco">Parentesco *</label>
-              <input
-                type="text"
-                id="contacto.parentesco"
-                name="contacto.parentesco"
-                value={formData.contactoEmergencia.parentesco}
-                onChange={handleChange}
-                className={errores['contacto.parentesco'] ? 'error' : ''}
-                placeholder="Esposa, Hijo, Madre, etc."
-              />
-              {errores['contacto.parentesco'] && (
-                <span className="error-message">{errores['contacto.parentesco']}</span>
-              )}
-            </div>
-          </div>
-        </fieldset>
-        
-        {/* Botones de acción */}
-        <div className="form-actions">
-          <button
-            type="button"
-            className="btn btn-secondary"
-            onClick={() => navigate('/pacientes')}
-            disabled={enviando}
-          >
-            Cancelar
-          </button>
-          <button
-            type="submit"
-            className="btn btn-primary"
-            disabled={enviando || loading}
-          >
-            {enviando ? 'Guardando...' : (id ? 'Actualizar' : 'Crear')}
-          </button>
-        </div>
-      </form>
-    </div>
+          </Form>
+        </Col>
+      </Row>
+    </Container>
   );
 };
 
