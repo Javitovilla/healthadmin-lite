@@ -117,15 +117,19 @@ export const PacienteProvider = ({ children }) => {
    * Implementa useEffect para cargas asíncronas
    */
   const obtenerPacientes = async (page = 1, limit = 10, search = '') => {
-    dispatch({ type: ACTIONS.SET_LOADING, payload: true });
-    try {
-      const response = await pacienteService.obtenerPacientes(page, limit, search);
-      dispatch({ type: ACTIONS.SET_PACIENTES, payload: response.data });
-      dispatch({ type: ACTIONS.SET_PAGINATION, payload: response.pagination });
-    } catch (error) {
-      dispatch({ type: ACTIONS.SET_ERROR, payload: error.message });
-    }
-  };
+  console.log('🔵 obtenerPacientes LLAMADO'); // ← AGREGAR ESTA LÍNEA
+  dispatch({ type: ACTIONS.SET_LOADING, payload: true });
+  try {
+    console.log('🟢 Antes de llamar pacienteService'); // ← AGREGAR ESTA LÍNEA
+    const response = await pacienteService.obtenerPacientes(page, limit, search);
+    console.log('🟢 Respuesta recibida:', response); // ← AGREGAR ESTA LÍNEA
+    dispatch({ type: ACTIONS.SET_PACIENTES, payload: response.data });
+    dispatch({ type: ACTIONS.SET_PAGINATION, payload: response.pagination });
+  } catch (error) {
+    console.error('🔴 ERROR en obtenerPacientes:', error); // ← AGREGAR ESTA LÍNEA
+    dispatch({ type: ACTIONS.SET_ERROR, payload: error.message });
+  }
+};
 
   /**
    * Obtener un paciente por ID

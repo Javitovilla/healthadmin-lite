@@ -1,77 +1,64 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
-const swaggerJsdoc = require('swagger-jsdoc');
-const swaggerUi = require('swagger-ui-express');
+require('dotenv').config();
 
 const app = express();
-const PORT = process.env.PORT || 5000;
 
 // Middlewares
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Configuración de Swagger
-const swaggerOptions = {
-  definition: {
-    openapi: '3.0.0',
-    info: {
-      title: 'HealthAdmin Lite API',
-      version: '1.0.0',
-      description: 'API REST para gestión de pacientes en el sistema HealthAdmin',
-      contact: {
-        name: 'Javier Villa Ardila',
-        email: 'javier@healthadmin.com'
-      },
-      servers: [{
-        url: 'http://localhost:5000',
-        description: 'Servidor de desarrollo'
-      }]
-    },
-  },
-  apis: ['./routes/*.js'], // Archivos que contienen anotaciones de Swagger
-};
+// Conectar a MongoDB
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/healthadmin-lite';
 
-const swaggerDocs = swaggerJsdoc(swaggerOptions);
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocs));
-
-// Conexión a MongoDB
-mongoose.connect('mongodb://localhost:27017/healthadmin-lite', {
-  useNewUrlParser: true,
-  useUnifiedTopology: true
-})
-.then(() => console.log('✅ Conectado a MongoDB'))
-.catch((err) => console.error('❌ Error conectando a MongoDB:', err));
+mongoose.connect(MONGODB_URI)
+  .then(() => console.log('✅ Conectado a MongoDB'))
+  .catch(err => console.error('❌ Error conectando a MongoDB:', err));
 
 // Importar rutas
+const authRoutes = require('./routes/auth');
 const pacientesRoutes = require('./routes/pacientes');
 
 // Usar rutas
+app.use('/api/auth', authRoutes);
 app.use('/api/pacientes', pacientesRoutes);
 
-// Ruta principal
+// Ruta raíz
 app.get('/', (req, res) => {
-  res.json({
-    mensaje: 'Bienvenido a HealthAdmin Lite API',
+  res.json({ 
+    message: 'API HealthAdmin Lite',
     version: '1.0.0',
-    documentacion: 'http://localhost:5000/api-docs'
+    endpoints: {
+      auth: {
+        login: 'POST /api/auth/login',
+        verificar: 'POST /api/auth/verificar'
+      },
+      pacientes: {
+        listar: 'GET /api/pacientes',
+        obtener: 'GET /api/pacientes/:id',
+        crear: 'POST /api/pacientes',
+        actualizar: 'PUT /api/pacientes/:id',
+        eliminar: 'DELETE /api/pacientes/:id'
+      }
+    }
   });
 });
 
-// Manejo de errores
-app.use((err, req, res, next) => {
-  console.error(err.stack);
-  res.status(500).json({
-    error: 'Algo salió mal!',
-    mensaje: err.message
+// Manejo de errores 404
+app.use((req, res) => {
+  res.status(404).json({ 
+    success: false,
+    message: 'Ruta no encontrada' 
   });
 });
 
 // Iniciar servidor
+const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-  console.log(`🚀 Servidor corriendo en http://localhost:${PORT}`);
-  console.log(`📚 Documentación Swagger en http://localhost:${PORT}/api-docs`);
+  console.log(`🚀 Servidor corriendo en puerto ${PORT}`);
+  console.log(`📡 API disponible en http://localhost:${PORT}/api`);
+  console.log(`🔐 Auth: http://localhost:${PORT}/api/auth/login`);
+  console.log(`👥 Pacientes: http://localhost:${PORT}/api/pacientes`);
 });
-
-module.exports = app;
